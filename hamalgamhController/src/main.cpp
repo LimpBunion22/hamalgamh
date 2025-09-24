@@ -2,6 +2,8 @@
 #include "SAMD_PWM.h"
 #include "Arduino.h"
 
+#define MAX_POINTS 2048
+
 #define _PWM_LOGLEVEL_       4
 #if defined(__SAMD51__)
 // Pin 5:TCC2_CH1, pin 7: TCC1_CH2, pin 11: TCC0_CH1, pin 25/MOSI: TC2_CH0
@@ -96,123 +98,213 @@ void setup()
 
 }
 
+float positions[MAX_POINTS];
+float delays[MAX_POINTS];
+int nPoints;
+String operationName;
+
 void loop()
 {
   switch (fsm.s) {
-  case ST_WAIT:
-    if(Serial.available() > 0){
-    
-      String entrada = Serial.readStringUntil('\n');
-      entrada.trim();
+    case ST_WAIT:{
+      if(Serial.available() > 0){
+      
+        String entrada = Serial.readStringUntil('\n');
+        entrada.trim();
 
-      if (!(entrada.length() > 0)) {
-        delay(100);
-        break;
+        if (!(entrada.length() > 0)) {
+          delay(100);
+          break;
+        }
+        if(entrada.startsWith("[HELP]")){
+          Serial.println("[HELP] - Available commands:");
+          Serial.println("\t[CHECK] - Check the SYSTEM");
+          Serial.println("\t[MONITORING] - Start MONITORING mode");
+          Serial.println("\t[RUN]<operationName_string>;<numberOfPoints_Int>;<pos1_float>,<delay1_float>;...;<posN_float>,<delayN_float>- Start RUN mode");
+          Serial.println("\t\tThe positions are especified in floats [5.0-11.0].");
+          Serial.println("\t\tThe delays are especified in floats [1-5000][ms].");
+          Serial.println("\t[EXIT] - Exit the program");
+        }
+        else if(entrada.startsWith("[CHECK]")){
+          Serial.println("[SYSTEM] - Checking System...");
+          fsm.s = ST_RUN_CHECK;
+        }
+        else if(entrada.startsWith("[MONITORING]")){
+          Serial.println("[SYSTEM] - Starting MONITORING mode...");
+          Serial.println(dashLine);
+          Serial.print("[STATE = MONITORING] - ");
+          Serial.println(dashLine);
+          fsm.s = ST_MONITORING;
+        }
+        else if(entrada.startsWith("[RUN]")){
+          Serial.println("[SYSTEM] - Starting RUN mode...");
+          fsm.s = ST_RUN;
+        }
+        else if(entrada.startsWith("[EXIT]")){
+          Serial.println("[SYSTEM] - Exiting program...");
+          // delete PWM_Instance;
+          return;
+        }
       }
-      if(entrada.startsWith("[HELP]")){
-        Serial.println("[HELP] - Available commands:");
-        Serial.println("\t[CHECK] - Check the SYSTEM");
-        Serial.println("\t[MONITORING] - Start MONITORING mode");
-        Serial.println("\t[RUN][Position0,Delay0,...,PositionN,DelayN,FinalPos] - Start RUN mode");
-        Serial.println("\t\tThe positions are especified in floats [5.0-11.0].");
-        Serial.println("\t\tThe delays are especified in floats [1-5000][ms].");
-        Serial.println("\t[EXIT] - Exit the program");
-      }
-      else if(entrada.startsWith("[CHECK]")){
-        Serial.println("[SYSTEM] - Checking System...");
-        fsm.s = ST_RUN_CHECK;
-      }
-      else if(entrada.startsWith("[MONITORING]")){
-        Serial.println("[SYSTEM] - Starting MONITORING mode...");
-        Serial.println(dashLine);
-        Serial.print("[STATE = MONITORING] - ");
-        Serial.println(dashLine);
-        fsm.s = ST_MONITORING;
-      }
-      else if(entrada.startsWith("[RUN]")){
-        Serial.println("[SYSTEM] - Starting RUN mode...");
-        fsm.s = ST_RUN;
-      }
-      else if(entrada.startsWith("[EXIT]")){
-        Serial.println("[SYSTEM] - Exiting program...");
-        delete PWM_Instance;
-        return;
+      delay(100);
+      break;
     }
-  }
-    delay(100);
-    break;
-  case ST_RUN_CHECK:
-      Serial.println("[CHECK] - Checking Servo...");
-      Serial.println("[CHECK] -   Servo to position 0.0%");
-      PWM_Instance->setPWM(6, 50.0f, 5.0f);
-      delay(1000);
-      Serial.println("[CHECK] -   Servo to position 50.0%");
-      PWM_Instance->setPWM(6, 50.0f, 8.0f);
-      delay(1000);
-      Serial.println("[CHECK] -   Servo to position 100.0%");
-      PWM_Instance->setPWM(6, 50.0f, 11.0f);
-      delay(100);
-      Serial.println("[CHECK] - Checking Monitoring system...");
-      delay(100);
-      Serial.println("[CHECK] - Checking complete.");
-      fsm.s = ST_WAIT;
-      Serial.println(dashLine);
-      Serial.print("[STATE = WAIT] - System ready");
-      Serial.println(dashLine);
-    break;
-  case ST_MONITORING:
-    if(Serial.available() > 0){
-    
-      String entrada = Serial.readStringUntil('\n');
-      entrada.trim();
+    case ST_RUN_CHECK:{
+        Serial.println("[CHECK] - Checking Servo...");
+        Serial.println("[CHECK] -   Servo to position 0.0%");
+        PWM_Instance->setPWM(6, 50.0f, 5.0f);
+        delay(1000);
+        Serial.println("[CHECK] -   Servo to position 50.0%");
+        PWM_Instance->setPWM(6, 50.0f, 8.0f);
+        delay(1000);
+        Serial.println("[CHECK] -   Servo to position 100.0%");
+        PWM_Instance->setPWM(6, 50.0f, 11.0f);
+        delay(100);
+        Serial.println("[CHECK] - Checking Monitoring system...");
+        delay(100);
+        Serial.println("[CHECK] - Checking complete.");
+        fsm.s = ST_WAIT;
+        Serial.println(dashLine);
+        Serial.print("[STATE = WAIT] - System ready");
+        Serial.println(dashLine);
+      break;
+    }
+    case ST_MONITORING:{
+      Serial.print("[READER][");
+      Serial.print(fsm.flankCounter*1000.0f/(millis() - t0));
+      Serial.println("]");
+      if(Serial.available() > 0){
+      
+        String entrada = Serial.readStringUntil('\n');
+        entrada.trim();
 
-      if (!(entrada.length() > 0)) {
-        delay(100);
-        break;
+        if (!(entrada.length() > 0)) {
+          delay(100);
+          break;
+        }
+        if(entrada.startsWith("[HELP]")){
+          Serial.println("[HELP] - Available commands:");
+          Serial.println("\t[CHECK] - Check the SYSTEM");
+          Serial.println("\t[MONITORING] - Start MONITORING mode");
+          Serial.println("\t[RUN]<operationName_string>;<numberOfPoints_Int>;<pos1_float>,<delay1_float>;...;<posN_float>,<delayN_float>- Start RUN mode");
+          Serial.println("\t\tThe positions are especified in floats [5.0-11.0].");
+          Serial.println("\t\tThe delays are especified in floats [1-5000][ms].");
+          Serial.println("\t[EXIT] - Exit the program");
+        }
+        else if(entrada.startsWith("[CHECK]")){
+          Serial.println("[SYSTEM] - Checking System...");
+          fsm.s = ST_RUN_CHECK;
+        }
+        else if(entrada.startsWith("[RUN]")){
+          Serial.println("[SYSTEM] - Starting RUN mode...");
+          fsm.s = ST_RUN;
+        }
+        else if(entrada.startsWith("[EXIT]")){
+          Serial.println("[SYSTEM] - Exiting program...");
+          // delete PWM_Instance;
+          return;
+        }
       }
+      break;
     }
-    break;
-  
-  default:
-    break;
+    case ST_RUN:{
+        Serial.println("[RUN] - Awaiting operation details");
+        
+        for(int i = 0; i<5; i++){
+          if(Serial.available() > 0) break;
+          delay(1000);
+        }
+        String entrada = Serial.readStringUntil('\n');
+        entrada.trim();
+
+        if (!(entrada.length() > 0)){
+          Serial.println("[ERROR] - BAD FORMAT - Operation details");
+          break;
+        }
+
+        int start = 0;
+        int sep = entrada.indexOf(';', start);
+        if (sep == -1){
+          Serial.println("[ERROR] - BAD FORMAT - Operation name");
+          break;
+        }
+        operationName = entrada.substring(start, sep);
+
+        start = sep + 1;
+        sep = entrada.indexOf(';', start);
+        if (sep == -1) return;
+        nPoints = entrada.substring(start, sep).toInt();
+        if (nPoints > MAX_POINTS){
+          nPoints = MAX_POINTS;
+          Serial.println("[WARNING] - TOO MANY POINTS - Number of points set to MAX 2048");
+        }
+
+        for (int i = 0; i < nPoints; i++) {
+          start = sep + 1;
+          sep = entrada.indexOf(';', start);
+          if (sep == -1) sep = entrada.length(); // último par
+          String pair = entrada.substring(start, sep);
+
+          int comma = pair.indexOf(',');
+          if (comma != -1) {
+            positions[i] = pair.substring(0, comma).toFloat();
+            if(positions[i])
+            delays[i] = pair.substring(comma + 1).toFloat();
+          }
+        }
+
+        Serial.print("[RUN] - Reading complete - Starting operation ");
+        Serial.println(operationName);
+
+        // t0 = millis();
+        PWM_Instance->setPWM(6, 50.0f, positions[0]);
+        for (int i = 1; i < nPoints; i++) {
+          delay(delays[1]);
+          PWM_Instance->setPWM(6, 50.0f, positions[0]);
+        }
+
+      break;
+      }
+    default:
+      break;
   }
 
   //Long delay has no effect on the operation of hardware-based PWM channels
-  delay(2000);  
-  Serial.print("[READER] - Flank counter = ");
-  Serial.println(fsm.flankCounter);
-  Serial.print("[READER] - Tiempo[s] = ");
-  Serial.println((millis() - t0)/1000.0f);
-  Serial.print("[READER] - Flancos/s = ");
-  Serial.println(fsm.flankCounter*1000.0f/(millis() - t0));
+  // delay(2000);  
+  // Serial.print("[READER] - Flank counter = ");
+  // Serial.println(fsm.flankCounter);
+  // Serial.print("[READER] - Tiempo[s] = ");
+  // Serial.println((millis() - t0)/1000.0f);
+  // Serial.print("[READER] - Flancos/s = ");
+  // Serial.println(fsm.flankCounter*1000.0f/(millis() - t0));
 
 
   
-  Serial.println("[SERVO] - Awaiting new test time (1.0 - 1000.0) for pin 6");
+  // Serial.println("[SERVO] - Awaiting new test time (1.0 - 1000.0) for pin 6");
 
-  if(!(Serial.available() > 0))
-    return;  
+  // if(!(Serial.available() > 0))
+  //   return;  
 
-  String entrada = Serial.readStringUntil('\n');
-  entrada.trim(); // Elimina espacios y saltos de línea
-  if (entrada.length() > 0) {
-    float valor = entrada.toFloat();
-    if(valor < 1.0f || valor > 1000.0f) {
-      Serial.println("[SERVO][ERROR] - Valor fuera de rango. Debe ser entre 1.0 y 1000.0.");        
-    }else {
-      Serial.print("[SERVO] - Nuevo valor recibido: ");
-      Serial.println(valor);
+  // String entrada = Serial.readStringUntil('\n');
+  // entrada.trim(); // Elimina espacios y saltos de línea
+  // if (entrada.length() > 0) {
+  //   float valor = entrada.toFloat();
+  //   if(valor < 1.0f || valor > 1000.0f) {
+  //     Serial.println("[SERVO][ERROR] - Valor fuera de rango. Debe ser entre 1.0 y 1000.0.");        
+  //   }else {
+  //     Serial.print("[SERVO] - Nuevo valor recibido: ");
+  //     Serial.println(valor);
 
-      for(float i=5; i<=11; i+=0.1f){
-        PWM_Instance->setPWM(6, 50.0f, i);
-        delay(valor);
-      }
-      for(float i=11; i>=5; i-=0.1f){
-        PWM_Instance->setPWM(6, 50.0f, i);
-        delay(valor);
-      }      
-    }
-  }
+  //     for(float i=5; i<=11; i+=0.1f){
+  //       PWM_Instance->setPWM(6, 50.0f, i);
+  //       delay(valor);
+  //     }
+  //     for(float i=11; i>=5; i-=0.1f){
+  //       PWM_Instance->setPWM(6, 50.0f, i);
+  //       delay(valor);
+  //     }      
+  //   }
+  // }
   
   // Serial.println("[SERVO] - Awaiting new duty cycle value (5.0 - 11.0) for pin 6");
 

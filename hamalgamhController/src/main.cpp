@@ -118,7 +118,7 @@ void loop()
         }
         if(entrada.startsWith("[HELP]")){
           Serial.println("[HELP] - WELCOME to the HAMALGAMH Testing System");
-          Serial.println("Configure your arduino with the following pins:");
+          Serial.println("  Configure your arduino with the following pins:");
           Serial.println("\tReader PIN = 7");
           Serial.println("\tPWM    PIN = 6");
           Serial.println("  Available commands:");
@@ -189,9 +189,9 @@ void loop()
       Serial.print("[READER][");
       Serial.print(fsm.flankCounter*1000.0f/(millis() - t0));
       Serial.println("]");
+      fsm.flankCounter = 0;
       t0 = millis();
       delay(1000);
-      fsm.flankCounter = 0;
       if(Serial.available() > 0){
       
         String entrada = Serial.readStringUntil('\n');
@@ -203,7 +203,7 @@ void loop()
         }
         if(entrada.startsWith("[HELP]")){
           Serial.println("[HELP] - WELCOME to the HAMALGAMH Testing System");
-          Serial.println("Configure your arduino with the following pins:");
+          Serial.println("  Configure your arduino with the following pins:");
           Serial.println("\tReader PIN = 7");
           Serial.println("\tPWM    PIN = 6");
           Serial.println("  Available commands:");

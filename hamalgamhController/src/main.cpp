@@ -117,7 +117,11 @@ void loop()
           break;
         }
         if(entrada.startsWith("[HELP]")){
-          Serial.println("[HELP] - Available commands:");
+          Serial.println("[HELP] - WELCOME to the HAMALGAMH Testing System");
+          Serial.println("Configure your arduino with the following pins:");
+          Serial.println("\tReader PIN = 7");
+          Serial.println("\tPWM    PIN = 6");
+          Serial.println("  Available commands:");
           Serial.println("\t[CHECK] - Check the SYSTEM");
           Serial.println("\t[MONITORING] - Start MONITORING mode");
           Serial.println("\t[RUN]<operationName_string>;<numberOfPoints_Int>;<pos1_float>,<delay1_float>;...;<posN_float>,<delayN_float>- Start RUN mode");
@@ -135,6 +139,9 @@ void loop()
           Serial.print("[STATE = MONITORING] - ");
           Serial.println(dashLine);
           fsm.s = ST_MONITORING;
+          t0 = millis();
+          fsm.flankCounter = 0;
+          fsm.readerEnabled = true;
         }
         else if(entrada.startsWith("[RUN]")){
           Serial.println("[SYSTEM] - Starting RUN mode...");
@@ -160,8 +167,17 @@ void loop()
         Serial.println("[CHECK] -   Servo to position 100.0%");
         PWM_Instance->setPWM(6, 50.0f, 11.0f);
         delay(100);
+
         Serial.println("[CHECK] - Checking Monitoring system...");
-        delay(100);
+        t0 = millis();
+        fsm.flankCounter = 0;
+        fsm.readerEnabled = true;        
+        delay(1000);
+        Serial.print("[READER][");
+        Serial.print(fsm.flankCounter*1000.0f/(millis() - t0));
+        Serial.println("]");
+        fsm.readerEnabled = false;  
+
         Serial.println("[CHECK] - Checking complete.");
         fsm.s = ST_WAIT;
         Serial.println(dashLine);
@@ -174,6 +190,7 @@ void loop()
       Serial.print(fsm.flankCounter*1000.0f/(millis() - t0));
       Serial.println("]");
       t0 = millis();
+      delay(1000);
       fsm.flankCounter = 0;
       if(Serial.available() > 0){
       
@@ -185,7 +202,11 @@ void loop()
           break;
         }
         if(entrada.startsWith("[HELP]")){
-          Serial.println("[HELP] - Available commands:");
+          Serial.println("[HELP] - WELCOME to the HAMALGAMH Testing System");
+          Serial.println("Configure your arduino with the following pins:");
+          Serial.println("\tReader PIN = 7");
+          Serial.println("\tPWM    PIN = 6");
+          Serial.println("  Available commands:");
           Serial.println("\t[CHECK] - Check the SYSTEM");
           Serial.println("\t[MONITORING] - Start MONITORING mode");
           Serial.println("\t[RUN]<operationName_string>;<numberOfPoints_Int>;<pos1_float>,<delay1_float>;...;<posN_float>,<delayN_float>- Start RUN mode");
@@ -259,6 +280,8 @@ void loop()
         Serial.println(operationName);
 
         // t0 = millis();
+        fsm.flankCounter = 0;
+        fsm.readerEnabled = true;
         PWM_Instance->setPWM(6, 50.0f, positions[0]);
         for (int i = 1; i < nPoints; i++) {
           delay(delays[1]);

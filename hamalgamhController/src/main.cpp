@@ -173,6 +173,8 @@ void loop()
       Serial.print("[READER][");
       Serial.print(fsm.flankCounter*1000.0f/(millis() - t0));
       Serial.println("]");
+      t0 = millis();
+      fsm.flankCounter = 0;
       if(Serial.available() > 0){
       
         String entrada = Serial.readStringUntil('\n');

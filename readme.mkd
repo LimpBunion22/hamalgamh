@@ -1,5 +1,18 @@
 
-[HELP]
-[CHECK]
-[MONITORING]
-[AWAIT]
+Comandos base:
+    [HELP]
+    [CHECK]
+    [MONITORING]
+    [AWAIT]
+
+INTRUCCIONES
+############
+
+    1. Crear entorno (Primera vez):
+        python -m venv .venv
+
+    2. Activar entorno:
+        .venv\Scripts\activate
+
+    3. Configurar entorno (Prinmera vez)
+        pip install -r requirements.txt

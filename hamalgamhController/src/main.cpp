@@ -44,7 +44,7 @@ void detectFlank()
   if(fsm.readerEnabled)
     fsm.flankCounter++;
 }
-float dutyCycle[] = { 2.0f, 30.0f, 5.0f, 8.0f };
+float dutyCycle[] = { 5.0f, 30.0f, 5.0f, 8.0f };
 
 // Must be same frequency for same channel
 float frequency[] = { 50.0f, 50.0f, 50.0f, 50.0f }; // = 2000.0f;

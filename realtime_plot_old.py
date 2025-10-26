@@ -11,7 +11,7 @@ Features
 
 - CLI data sources:
     * --stdin   : read "x y" pairs from STDIN (one pair per line)
-    * --tcp PORT: open a TCP line server on localhost:PORT; send "x y\\n"
+    * --tcp PORT: open a TCP line server on localhost:PORT; send "x y\n"
 
 - Interactivity:
     * Left click on the axes to insert a point at cursor position.
@@ -22,9 +22,9 @@ Features
       By default it prints the point. You can override via:
         plotter.on_point = lambda x, y, source: None
 
-- Window & Theme:
-    * --window-frac 0.75x1.0 sets width=75% of screen, height=100% of screen.
-    * --theme industrial|dark|light (default industrial) for an "industrial" dark look.
+Test quickly:
+    python3 realtime_plot.py --stdin
+    # then type: 0 0 <Enter>, 1 1 <Enter>, 2 1.5 <Enter> ...
 
 Author: ChatGPT
 License: MIT
@@ -36,6 +36,7 @@ import sys
 import threading
 import socket
 import queue
+import time
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple, List
 
@@ -43,6 +44,13 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
+import signal, sys
+
+def handler(sig, frame):
+    plt.close('all')
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, handler)
 
 @dataclass
 class Point:
@@ -58,24 +66,15 @@ class RealTimePlotter:
         xlim: Optional[Tuple[float, float]] = [0, 60],
         ylim: Optional[Tuple[float, float]] = [0, 100],
         update_interval_ms: int = 50,
-        theme: str = 'industrial',
-        window_frac: Tuple[float, float] = (0.75, 1.0),
     ):
         self._q: "queue.Queue[Point]" = queue.Queue()
         self._points_x: List[float] = []
         self._points_y: List[float] = []
-        # Segunda línea (puntos del Arduino)
-        self._arduino_x: List[float] = []
-        self._arduino_y: List[float] = []
-        self._line_arduino: Optional[Line2D] = None
-
         self._max_points = int(max_points)
         self._autoscale = bool(autoscale)
         self._xlim_fixed = xlim
         self._ylim_fixed = ylim
         self._update_interval_ms = int(update_interval_ms)
-        self._theme = theme
-        self._window_frac = window_frac
 
         # Callback invoked for each point
         # Signature: on_point(x: float, y: float, source: str) -> None
@@ -86,7 +85,7 @@ class RealTimePlotter:
         # Matplotlib elements
         self._fig: Optional[plt.Figure] = None
         self._ax: Optional[plt.Axes] = None
-        self._line: Optional[Line2D] = None
+        self._line: Optional[Line2D] = None 
         self._ani: Optional[FuncAnimation] = None
 
         self._stdin_thread: Optional[threading.Thread] = None
@@ -117,10 +116,6 @@ class RealTimePlotter:
         """Queue a new point (thread-safe)."""
         self._q.put(Point(float(x), float(y), source))
 
-    def put_point_arduino(self, x: float, y: float) -> None:
-        """Añade un punto a la línea del Arduino."""
-        self._q.put(Point(float(x), float(y), source="arduino"))
-
     # ---------- Data sources ----------
     def enable_stdin_reader(self) -> None:
         if self._stdin_thread is None:
@@ -134,92 +129,11 @@ class RealTimePlotter:
             self._tcp_thread = threading.Thread(target=self._tcp_loop, args=(port,), daemon=True)
             self._tcp_thread.start()
 
-    # ---------- Window & Theme helpers ----------
-    @staticmethod
-    def _get_screen_size() -> Tuple[int, int]:
-        try:
-            import tkinter as tk  # lightweight way to query screen
-            root = tk.Tk()
-            root.withdraw()
-            w = root.winfo_screenwidth()
-            h = root.winfo_screenheight()
-            root.destroy()
-            return int(w), int(h)
-        except Exception:
-            return 1280, 720
-
-    def _apply_theme(self) -> None:
-        theme = (self._theme or "industrial").lower()
-        if theme == "industrial":
-            # reset first to avoid style accumulation
-            matplotlib.rcdefaults()
-            rc = matplotlib.rcParams
-            rc.update({
-                "figure.facecolor": "#0c0f12",
-                "axes.facecolor": "#0c0f12",
-                "axes.edgecolor": "#6a717d",
-                "axes.labelcolor": "#cbd3dc",
-                "text.color": "#cbd3dc",
-                "xtick.color": "#aab2bd",
-                "ytick.color": "#aab2bd",
-                "grid.color": "#2a2f36",
-                "grid.linestyle": (0, (3, 3)),
-                "grid.linewidth": 0.8,
-                "axes.grid": True,
-                "font.size": 11,
-                "font.family": "DejaVu Sans",
-            })
-        elif theme == "dark":
-            matplotlib.rcdefaults()
-            try:
-                plt.style.use("dark_background")
-            except Exception:
-                pass
-        elif theme == "light":
-            matplotlib.rcdefaults()
-        else:
-            matplotlib.rcdefaults()
-
-    def _size_window(self) -> None:
-        # Resize the GUI window to (width_frac * screen_w, height_frac * screen_h)
-        w_screen, h_screen = self._get_screen_size()
-        frac_w, frac_h = self._window_frac
-        w_px = max(200, int(w_screen * float(frac_w)))
-        h_px = max(200, int(h_screen * float(frac_h)))
-
-        try:
-            mgr = self._fig.canvas.manager
-            win = getattr(mgr, "window", None)
-            # Try Tk
-            if win is not None and hasattr(win, "wm_geometry"):
-                win.wm_geometry(f"{w_px}x{h_px}+0+0")
-            # Try Qt
-            elif win is not None and hasattr(win, "resize"):
-                try:
-                    win.resize(w_px, h_px)
-                    if hasattr(win, "move"):
-                        win.move(0, 0)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # Also set figure inches as fallback (works across backends)
-        dpi = self._fig.get_dpi()
-        self._fig.set_size_inches(w_px / dpi, h_px / dpi, forward=True)
-
     # ---------- Internals ----------
     def _setup_plot(self) -> None:
-        self._apply_theme()
         self._fig, self._ax = plt.subplots()
-        try:
-            self._fig.canvas.manager.set_window_title("HAMALGAMH TOOL")
-        except Exception:
-            pass
-        self._line, = self._ax.plot([], [], lw=1.8, marker='o', ms=3)
-        # Línea para puntos Arduino
-        self._line_arduino, = self._ax.plot([], [], lw=2, color='#ffb347', marker='x', ms=4, label='Par medido')
-        self._ax.legend(loc='upper right', facecolor='#0c0f12', edgecolor='#6a717d', labelcolor='#cbd3dc')
+        self._fig.canvas.manager.set_window_title("HAMALGAMH TOOL")
+        self._line, = self._ax.plot([], [], lw=1.5, marker='o', ms=2)
 
         if self._xlim_fixed:
             self._ax.set_xlim(*self._xlim_fixed)
@@ -230,21 +144,12 @@ class RealTimePlotter:
         self._ax.set_ylabel("y")
         self._ax.set_title("Realtime points (click to add; press 'd' then click to delete)")
 
-        # theme-specific line colors
-        if (self._theme or '').lower() == 'industrial' and self._line is not None:
-            self._line.set_color('#00d1d1')
-            self._line.set_markerfacecolor('#0c0f12')
-            self._line.set_markeredgecolor('#8bdada')
-
         # Event handlers
         self._fig.canvas.mpl_connect("button_press_event", self._on_click)
         self._fig.canvas.mpl_connect("key_press_event", self._on_key_press)
 
         # Animation
         self._ani = FuncAnimation(self._fig, self._on_timer, interval=self._update_interval_ms, blit=False)
-
-        # Size window after creation
-        self._size_window()
 
     def _on_timer(self, _frame):
         drained = 0
@@ -261,31 +166,24 @@ class RealTimePlotter:
         return self._line,
 
     def _append_point(self, p: Point) -> None:
-        if p.source == "arduino":
-            self._arduino_x.append(p.x)
-            self._arduino_y.append(p.y)
-            if len(self._arduino_x) > self._max_points:
-                overflow = len(self._arduino_x) - self._max_points
-                del self._arduino_x[:overflow]
-                del self._arduino_y[:overflow]
-        else:
-            if(len(self._points_x)>0):
-                for i in range(len(self._points_x)):                
-                    if(self._points_x[i]>p.x):
-                        self._points_x.insert(i, p.x)
-                        self._points_y.insert(i, p.y)
-                        break
-                    if i == len(self._points_x)-1:      
-                        self._points_x.append(p.x)
-                        self._points_y.append(p.y)
-            else:  
-                self._points_x.append(p.x)
-                self._points_y.append(p.y)
-            if len(self._points_x) > self._max_points:
-                # drop from the front
-                overflow = len(self._points_x) - self._max_points
-                del self._points_x[:overflow]
-                del self._points_y[:overflow]
+        if(len(self._points_x)>0):
+            for i in range(len(self._points_x)):                
+                if(self._points_x[i]<p.x):
+                    self._points_x.insert(i, p.x)
+                    self._points_y.insert(i, p.y)
+                    break
+                if i == len(self._points_x)-1:      
+                    self._points_x.append(p.x)
+                    self._points_y.append(p.y)
+        else:  
+            self._points_x.append(p.x)
+            self._points_y.append(p.y)
+
+        if len(self._points_x) > self._max_points:
+            # drop from the front
+            overflow = len(self._points_x) - self._max_points
+            del self._points_x[:overflow]
+            del self._points_y[:overflow]
         # user callback
         try:
             self.on_point(p.x, p.y, p.source)
@@ -294,9 +192,6 @@ class RealTimePlotter:
 
     def _refresh_visual(self) -> None:
         self._line.set_data(self._points_x, self._points_y)
-        if self._line_arduino is not None:
-            self._line_arduino.set_data(self._arduino_x, self._arduino_y)
-            
         if self._autoscale and (self._xlim_fixed is None or self._ylim_fixed is None):
             self._ax.relim()
             self._ax.autoscale_view()
@@ -366,7 +261,6 @@ class RealTimePlotter:
 
     def _tcp_loop(self, port: int):
         print(f"[tcp server] listening on 127.0.0.1:{port} (send 'x y\\n')", file=sys.stderr)
-        import socket
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(("127.0.0.1", int(port)))
@@ -427,8 +321,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--xlim", type=float, nargs=2, default=None, help="Fixed x limits: xmin xmax.")
     parser.add_argument("--ylim", type=float, nargs=2, default=None, help="Fixed y limits: ymin ymax.")
     parser.add_argument("--fps", type=float, default=20.0, help="Target updates per second (default 20).")
-    parser.add_argument("--theme", choices=["industrial", "dark", "light"], default="industrial", help="UI theme")
-    parser.add_argument("--window-frac", type=str, default="0.75x1.0", help="Window size as WIDTHxHEIGHT fractions of screen, e.g., 0.75x1.0")
     args = parser.parse_args(argv)
 
     # configure singleton
@@ -437,13 +329,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     plotter._xlim_fixed = tuple(args.xlim) if args.xlim else None
     plotter._ylim_fixed = tuple(args.ylim) if args.ylim else None
     plotter._update_interval_ms = int(max(1.0, 1000.0 / float(args.fps)))
-    plotter._theme = args.theme
-    try:
-        wf = args.window_frac.lower().replace(' ', '')
-        w_str, h_str = wf.split('x', 1)
-        plotter._window_frac = (float(w_str), float(h_str))
-    except Exception:
-        plotter._window_frac = (0.75, 1.0)
 
     # data sources
     if args.stdin:

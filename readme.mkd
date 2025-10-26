@@ -12,7 +12,8 @@ INTRUCCIONES
         python -m venv .venv
 
     2. Activar entorno:
-        .venv\Scripts\activate
+        .venv\Scripts\activate  #WINDOWS
+        source .venv/bin/activate      #LINUX
 
     3. Configurar entorno (Prinmera vez)
         pip install -r requirements.txt

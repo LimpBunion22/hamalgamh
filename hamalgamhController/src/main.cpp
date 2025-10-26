@@ -99,7 +99,7 @@ void setup()
 }
 
 float positions[MAX_POINTS];
-float delays[MAX_POINTS];
+float times[MAX_POINTS];
 int nPoints;
 String operationName;
 
@@ -126,7 +126,7 @@ void loop()
           Serial.println("\t[MONITORING] - Start MONITORING mode");
           Serial.println("\t[RUN]<operationName_string>;<numberOfPoints_Int>;<pos1_float>,<delay1_float>;...;<posN_float>,<delayN_float>- Start RUN mode");
           Serial.println("\t\tThe positions are especified in floats [5.0-11.0].");
-          Serial.println("\t\tThe delays are especified in floats [1-5000][ms].");
+          Serial.println("\t\tThe times are especified in floats [1-5000][ms].");
           Serial.println("\t[EXIT] - Exit the program");
         }
         else if(entrada.startsWith("[CHECK]")){
@@ -211,7 +211,7 @@ void loop()
           Serial.println("\t[MONITORING] - Start MONITORING mode");
           Serial.println("\t[RUN]<operationName_string>;<numberOfPoints_Int>;<pos1_float>,<delay1_float>;...;<posN_float>,<delayN_float>- Start RUN mode");
           Serial.println("\t\tThe positions are especified in floats [5.0-11.0].");
-          Serial.println("\t\tThe delays are especified in floats [1-5000][ms].");
+          Serial.println("\t\tThe times are especified in floats [1-5000][ms].");
           Serial.println("\t[EXIT] - Exit the program");
         }
         else if(entrada.startsWith("[CHECK]")){
@@ -272,22 +272,47 @@ void loop()
           if (comma != -1) {
             positions[i] = pair.substring(0, comma).toFloat();
             if(positions[i])
-            delays[i] = pair.substring(comma + 1).toFloat();
+            times[i] = pair.substring(comma + 1).toFloat();
           }
         }
 
         Serial.print("[RUN] - Reading complete - Starting operation ");
-        Serial.println(operationName);
+        Serial.print(operationName);
+        Serial.print(" with ");
+        Serial.print(nPoints);
+        Serial.println(" points.");
 
         // t0 = millis();
         fsm.flankCounter = 0;
         fsm.readerEnabled = true;
-        PWM_Instance->setPWM(6, 50.0f, positions[0]);
-        for (int i = 1; i < nPoints; i++) {
-          delay(delays[1]);
-          PWM_Instance->setPWM(6, 50.0f, positions[0]);
-        }
+        int cnt = 0;
+        float position = positions[0];
+        float delta = (positions[1]-positions[0])/(times[1]-times[0])*100;
+        PWM_Instance->setPWM(6, 50.0f, position);
+        fsm.flankCounter = 0;
+        t0 = millis();
 
+        unsigned long t1 = millis();
+        while(true) {
+          delay(100-(millis()-t1));
+          t1 = millis();
+          if(times[cnt]<(millis()-t0)){
+            if(cnt == (nPoints-1)) break;
+            else{
+              cnt += 1;
+              position = positions[cnt];
+              delta = (positions[cnt+1]-positions[cnt])/(times[cnt+1]-times[cnt])*100;
+            }
+          }else position += delta;
+
+          PWM_Instance->setPWM(6, 50.0f, position);
+          Serial.println(fsm.flankCounter*1000.0f/(millis() - t0));
+          fsm.flankCounter = 0;
+        }
+        Serial.print("[RUN] - Operation ");
+        Serial.print(operationName);
+        Serial.print(" - COMPLETED");
+        fsm.s = ST_WAIT;
       break;
       }
     default:

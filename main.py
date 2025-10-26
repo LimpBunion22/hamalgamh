@@ -7,6 +7,7 @@ import time
 import serial
 import serial.tools.list_ports
 from realtime_plot import plotter
+from datetime import datetime
 
 
 BAUD = 115200
@@ -45,7 +46,7 @@ def open_serial(device, baud=BAUD, timeout=TIMEOUT):
         ser.reset_output_buffer()
         return ser
     except serial.SerialException as e:
-        print(f"Error abriendo {device}: {e}")
+        print(f"<[SYSTEM] Error abriendo {device}: {e}")
         return None
 
 def handshake(ser, send=HANDSHAKE_SEND, expect=HANDSHAKE_EXPECT, tries=3):
@@ -55,7 +56,7 @@ def handshake(ser, send=HANDSHAKE_SEND, expect=HANDSHAKE_EXPECT, tries=3):
         # esperar respuesta
         line = ser.readline().decode('utf-8', errors='ignore').strip()
         if line:
-            print(f"Respuesta recibida: {line}")
+            print(f"<[SYSTEM] Respuesta recibida: {line}")
             if line.__contains__(expect):
                 while True:
                     line = ser.readline().decode('utf-8', errors='ignore')
@@ -68,48 +69,97 @@ def handshake(ser, send=HANDSHAKE_SEND, expect=HANDSHAKE_EXPECT, tries=3):
     return False
 
 def interactive_loop(ser):
-    print("Entrando en modo interactivo. Escribe texto y se enviará al Arduino (CTRL-C para salir).")
+    print("<[SYSTEM] Entrando en modo interactivo.")
+    print("<[SYSTEM] Esperando comando (CTRL-C para salir).")
     try:
         while True:
             to_send = input("> ")
             ser.write((to_send + '\n').encode('utf-8'))
             ser.flush()
             # lee respuestas hasta timeout
-            start = time.time()
             while True:
                 line = ser.readline().decode('utf-8', errors='ignore')
                 if not line:
                     break
-                print(f"< {line.strip()}")
-                # evitar bucle infinito: si tardó > 0.1s entre lecturas, salimos de lectura inmediata
-                # if time.time() - start > 0.1:
-                #     break
+                print(f"<[ARDUINO]   {line.strip()}")
+
+            if(to_send.__contains__("[EXIT]")):
+                raise KeyboardInterrupt
+
+            if(to_send.__contains__("[RUN]")):
+                plotter._arduino_x.clear()
+                plotter._arduino_y.clear()
+                now = datetime.now()
+                testName = now.strftime("HamalgamhTest_%Y_%m_%d__%H_%M_%S")
+                testData = testName + ";" + str(len(plotter._points_x)) + ";"
+                # testData += str(plotter._points_y[1]) + "," + str(0) + ";"
+                for i in range(len(plotter._points_x)):
+                    print(f"<[SYSTEM] Datos y{plotter._points_y[i]} x{plotter._points_x[i]}")
+
+                for i in range(len(plotter._points_x)):
+                    testData += str(plotter._points_y[i]) + "," + str(1000*(plotter._points_x[i])) + ";"
+                
+                print(f"<[SYSTEM] Ejecutando operacion \n\t{testData}")
+                ser.write((testData + '\n').encode('utf-8'))
+                ser.flush()
+
+                while True:
+                    line = ser.readline().decode('utf-8', errors='ignore')
+                    if not line:
+                        break
+                    print(f"<[ARDUINO]   {line.strip()}")
+                    if line.__contains__("Reading complete"):
+                        break
+                
+                start = time.time()
+                cnt = 0
+                xTime = 0.0
+                while True:
+                    line = ser.readline().decode('utf-8', errors='ignore')
+                    if not line:
+                        if time.time() - start > 2:
+                            break
+                        else:
+                            continue
+                    print(f"<[ARDUINO]   {line.strip()}")
+                    if line.__contains__("COMPLETED"):
+                        break
+                    y = 0.0
+                    try:
+                        y = float(line)
+                    except:
+                        y = -1
+                    plotter.put_point_arduino(xTime,y)
+                    xTime += 0.1
+                    cnt +=1            
+            
     except KeyboardInterrupt:
-        print("\nSaliendo...")
+        print("\n<[SYSTEM] Saliendo...")
     finally:
         ser.close()
+        print("\n<[SYSTEM] Fin de programa")
 
 def main():
-    print("Puertos serie disponibles:")
+    print("<[SYSTEM] Puertos serie disponibles:")
     for dev, desc in list_serial_ports():
         print(f"  {dev}  --  {desc}")
     device = auto_find_arduino()
     if device is None:
-        print("No se detectaron puertos serie. Especifica el puerto como argumento.")
+        print("<[SYSTEM] No se detectaron puertos serie. Especifique el puerto como argumento.")
         sys.exit(1)
-    print(f"Intentando usar puerto: {device}")
+    print(f"<[SYSTEM] Intentando usar puerto: {device}")
 
     ser = open_serial(device)
     if ser is None:
         sys.exit(1)
 
-    print("Realizando handshake...")
+    print("<[SYSTEM] Realizando handshake...")
     if handshake(ser):
-        print("Handshake OK.")
+        print("<[SYSTEM] Handshake OK.")
     else:
-        print("Handshake fallido. Aún puedes usar el modo interactivo.")
+        print("<[SYSTEM] Handshake fallido. Aún puedes usar el modo interactivo.")
 
-    plotter.on_point = lambda x, y, source: print(f"[PLOTTER] x{x}, y{y}, source{source}")  # aquí tu lógica
+    plotter.on_point = lambda x, y, source: print(f"<[SYSTEM][PLOTTER] x{x}, y{y}, source{source}")  # aquí tu lógica
     plotter.start_in_thread()         # abre la ventana (no bloquea)
     plotter.put_point(0.0, 0.0)       # envía puntos cuando quieras
     plotter.put_point(1.0, 1.2)

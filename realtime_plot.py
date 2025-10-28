@@ -43,6 +43,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
+import numpy as np
+from matplotlib.widgets import Button
+import csv
+from datetime import datetime
+from itertools import zip_longest
+from tkinter import Tk, filedialog
 
 @dataclass
 class Point:
@@ -68,11 +74,19 @@ class RealTimePlotter:
         self._arduino_x: List[float] = []
         self._arduino_y: List[float] = []
         self._line_arduino: Optional[Line2D] = None
+        # Segundo gráfico (subplot inferior)
+        self._points2_x: List[float] = []
+        self._points2_y: List[float] = []
+        self._line2: Optional[Line2D] = None
+        self._ax_bottom: Optional[plt.Axes] = None
+
 
         self._max_points = int(max_points)
         self._autoscale = bool(autoscale)
         self._xlim_fixed = xlim
         self._ylim_fixed = ylim
+        self._xlim_bottom_fixed = (0, 100)  # eje X del subplot inferior
+
         self._update_interval_ms = int(update_interval_ms)
         self._theme = theme
         self._window_frac = window_frac
@@ -95,6 +109,10 @@ class RealTimePlotter:
         self._run_threads.clear()
 
         self._delete_mode = False  # toggled by 'd' key press
+
+        #Event system
+        self.event = False
+        self.eventCmd = ""
 
     # ---------- Public API ----------
     def start(self, block: bool = True) -> None:
@@ -120,6 +138,24 @@ class RealTimePlotter:
     def put_point_arduino(self, x: float, y: float) -> None:
         """Añade un punto a la línea del Arduino."""
         self._q.put(Point(float(x), float(y), source="arduino"))
+
+    def set_second_graph(self, xs: List[float], ys: List[float]) -> None:
+        """
+        Actualiza el segundo gráfico (subplot inferior) con listas de X e Y.
+        Mantiene los mismos colores que la serie principal.
+        """
+        if len(xs) != len(ys):
+            raise ValueError("xs y ys deben tener la misma longitud")
+        # Copiamos/normalizamos a float
+        self._points2_x = [float(v) for v in xs]
+        self._points2_y = [float(v) for v in ys]
+        # Recorta si excede max_points (consistencia con el primero)
+        if len(self._points2_x) > self._max_points:
+            overflow = len(self._points2_x) - self._max_points
+            del self._points2_x[:overflow]
+            del self._points2_y[:overflow]
+        # Refresco inmediato
+        self._refresh_visual()
 
     # ---------- Data sources ----------
     def enable_stdin_reader(self) -> None:
@@ -166,7 +202,7 @@ class RealTimePlotter:
                 "grid.linestyle": (0, (3, 3)),
                 "grid.linewidth": 0.8,
                 "axes.grid": True,
-                "font.size": 11,
+                "font.size": 18,
                 "font.family": "DejaVu Sans",
             })
         elif theme == "dark":
@@ -211,30 +247,50 @@ class RealTimePlotter:
     # ---------- Internals ----------
     def _setup_plot(self) -> None:
         self._apply_theme()
-        self._fig, self._ax = plt.subplots()
+        # self._fig, self._ax = plt.subplots()
+        self._fig, (self._ax, self._ax_bottom) = plt.subplots(2, 1, height_ratios=[2, 1])
+        self._ax2 = self._ax.twinx()
+        self._ax2.patch.set_alpha(0)         # fondo transparente
+        self._ax2.grid(False)                # que la rejilla no duplique
+
         try:
             self._fig.canvas.manager.set_window_title("HAMALGAMH TOOL")
         except Exception:
             pass
         self._line, = self._ax.plot([], [], lw=1.8, marker='o', ms=3)
         # Línea para puntos Arduino
-        self._line_arduino, = self._ax.plot([], [], lw=2, color='#ffb347', marker='x', ms=4, label='Par medido')
-        self._ax.legend(loc='upper right', facecolor='#0c0f12', edgecolor='#6a717d', labelcolor='#cbd3dc')
+        self._line_arduino, = self._ax2.plot([], [], lw=2, color='#ffb347', marker=None, ms=4, label='Par medido')
+        self._legend = self._ax2.legend(loc='upper right', facecolor='#0c0f12', edgecolor='#6a717d', labelcolor='#cbd3dc')
+        self._line2, = self._ax_bottom.plot([], [], lw=1.8, marker='o', ms=3)
 
         if self._xlim_fixed:
             self._ax.set_xlim(*self._xlim_fixed)
+            self._ax2.set_xlim(*self._xlim_fixed)
+
+        if hasattr(self, "_xlim_bottom_fixed") and self._xlim_bottom_fixed:
+            self._ax_bottom.set_xlim(*self._xlim_bottom_fixed)
+
         if self._ylim_fixed:
             self._ax.set_ylim(*self._ylim_fixed)
+            # self._ax_bottom.set_ylim(*self._ylim_fixed)  # usa mismo rango Y por defecto
 
-        self._ax.set_xlabel("x")
-        self._ax.set_ylabel("y")
-        self._ax.set_title("Realtime points (click to add; press 'd' then click to delete)")
+
+        self._ax.set_xlabel("Tiempo [s]")
+        self._ax.set_ylabel("Actuación del servo [%]")
+        self._ax2.set_ylabel("Par de frenado [N·m]")
+        self._ax.set_title("Puntos de actuación del servo (click to add; press 'd' then click to delete)")
+        self._ax_bottom.set_xlabel("Actuación del servo [%]")
+        self._ax_bottom.set_ylabel("Par de frenado [N·m]")
 
         # theme-specific line colors
         if (self._theme or '').lower() == 'industrial' and self._line is not None:
             self._line.set_color('#00d1d1')
             self._line.set_markerfacecolor('#0c0f12')
             self._line.set_markeredgecolor('#8bdada')
+
+            self._line2.set_color('#00d1d1')
+            self._line2.set_markerfacecolor('#0c0f12')
+            self._line2.set_markeredgecolor('#8bdada')
 
         # Event handlers
         self._fig.canvas.mpl_connect("button_press_event", self._on_click)
@@ -245,6 +301,124 @@ class RealTimePlotter:
 
         # Size window after creation
         self._size_window()
+        
+        clear_ax = self._fig.add_axes([0.005, 0.95, 0.06, 0.03]) 
+        self._btn_clear = Button(
+            ax=clear_ax,
+            label='CLEAR',
+            color='#2a2f36',
+            hovercolor='#444a55',
+        )
+
+        exit_ax = self._fig.add_axes([0.005, 0.90, 0.06, 0.03]) 
+        self._btn_exit= Button(
+            ax=exit_ax,
+            label='EXIT',
+            color='#2a2f36',
+            hovercolor='#444a55',
+        )
+
+        run_ax = self._fig.add_axes([0.005, 0.85, 0.06, 0.03]) 
+        self._btn_run= Button(
+            ax=run_ax,
+            label='RUN',
+            color='#2a2f36',
+            hovercolor='#444a55',
+        )
+
+        save_ax = self._fig.add_axes([0.005, 0.80, 0.06, 0.03]) 
+        self._btn_save= Button(
+            ax=save_ax,
+            label='SAVE',
+            color='#2a2f36',
+            hovercolor='#444a55',
+        )
+
+        load_ax = self._fig.add_axes([0.005, 0.75, 0.06, 0.03]) 
+        self._btn_load= Button(
+            ax=load_ax,
+            label='LOAD',
+            color='#2a2f36',
+            hovercolor='#444a55',
+        )
+
+        def _on_clear(event):
+            # vaciar datos
+            self._points_x.clear()
+            self._points_y.clear()
+            self._arduino_x.clear()
+            self._arduino_y.clear()
+            self._points2_x.clear()
+            self._points2_y.clear()
+            self._points_x.append(0.0)
+            self._points_y.append(0.0)
+            self._refresh_visual()
+
+        def _on_exit(event):
+            self.eventCmd = "[EXIT]"            
+            self.event = True
+
+        def _on_run(event):
+            self.eventCmd = "[RUN]"            
+            self.event = True
+
+        def _on_save(event):
+            root = Tk()
+            root.withdraw()  # oculta la ventana principal
+
+            ruta = filedialog.asksaveasfilename(
+                title="Guardar archivo CSV",
+                defaultextension=".csv",
+                filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+            )
+
+            if not ruta:
+                print("Guardado cancelado.")
+            else:
+                with open(ruta, "w", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Tiempo servo [s]", "Puntos Servo", "Tiempo[s]", "Servo[%%]", "Par[N·m]"])  # cabecera
+                    writer.writerows(zip_longest(self._points_x, self._points_y, self._arduino_x, self._points2_x, self._arduino_y, fillvalue=""))
+
+        def _on_load(event):
+            root = Tk()
+            root.withdraw()  # oculta la ventana principal de Tk
+            ruta = filedialog.askopenfilename(
+                title="Selecciona un archivo CSV",
+                filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+            )
+
+            if not ruta:
+                print("No se seleccionó ningún archivo.")
+            else:
+                self._points_x.clear()
+                self._points_y.clear()
+                self._arduino_x.clear()
+                self._arduino_y.clear()
+                self._points2_x.clear()
+                self._points2_y.clear()
+
+                with open(ruta, "r") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        val = row["Tiempo servo [s]"]
+                        if val:
+                            self._points_x.append(float(row["Tiempo servo [s]"]) or 0.0)
+                            self._points_y.append(float(row["Puntos Servo"])  or 0.0)
+                        val = row["Tiempo[s]"]
+                        if val:
+                            self._arduino_x.append(float(row["Tiempo[s]"])  or 0.0)
+                            self._arduino_y.append(float(row["Par[N·m]"])  or 0.0)
+                            self._points2_x.append(float(row["Servo[%%]"])  or 0.0)
+                            self._points2_y.append(float(row["Par[N·m]"])  or 0.0)
+                
+                self._refresh_visual()
+        
+        self._btn_clear.on_clicked(_on_clear)
+        self._btn_exit.on_clicked(_on_exit)
+        self._btn_run.on_clicked(_on_run)
+        self._btn_save.on_clicked(_on_save)
+        self._btn_load.on_clicked(_on_load)
 
     def _on_timer(self, _frame):
         drained = 0
@@ -268,6 +442,8 @@ class RealTimePlotter:
                 overflow = len(self._arduino_x) - self._max_points
                 del self._arduino_x[:overflow]
                 del self._arduino_y[:overflow]
+            if self._arduino_y:
+                self._update_legend_label(f"Par medido: {self._arduino_y[-1]:.2f} N·m\nPar maximo:  {np.max(self._arduino_y):.2f} N·m")
         else:
             if(len(self._points_x)>0):
                 for i in range(len(self._points_x)):                
@@ -296,22 +472,66 @@ class RealTimePlotter:
         self._line.set_data(self._points_x, self._points_y)
         if self._line_arduino is not None:
             self._line_arduino.set_data(self._arduino_x, self._arduino_y)
+
+        if self._line2 is not None:
+            self._line2.set_data(self._points2_x, self._points2_y)
             
-        if self._autoscale and (self._xlim_fixed is None or self._ylim_fixed is None):
-            self._ax.relim()
-            self._ax.autoscale_view()
-            # add a small margin for nicer visuals
-            x_min, x_max = self._ax.get_xlim()
-            y_min, y_max = self._ax.get_ylim()
-            self._ax.set_xlim(*self._add_margin(x_min, x_max))
-            self._ax.set_ylim(*self._add_margin(y_min, y_max))
+        # --- Autoscaling dinámico ---
+        if self._autoscale:
+            # EJE SUPERIOR IZQUIERDO (principal)
+            if self._xlim_fixed is None or self._ylim_fixed is None:
+                self._ax.relim()
+                self._ax.autoscale_view(scalex=(self._xlim_fixed is None), scaley=(self._ylim_fixed is None))
+                x_min, x_max = self._ax.get_xlim()
+                y_min, y_max = self._ax.get_ylim()
+                # Margen suave
+                self._ax.set_xlim(*self._add_margin(x_min, x_max)) if self._xlim_fixed is None else None
+                self._ax.set_ylim(*self._add_margin(y_min, y_max)) if self._ylim_fixed is None else None
+
+            # EJE SUPERIOR DERECHO (twinx): deja que matplotlib escale Y
+            if getattr(self, "_ax2", None) is not None and self._line_arduino is not None:
+                # primero igualamos el X con el eje principal
+                x_min, x_max = self._ax.get_xlim()
+                self._ax2.set_xlim(x_min, x_max)
+
+                # ahora pedimos a matplotlib que recalcule el rango Y con TODOS esos datos
+                self._ax2.relim()
+                self._ax2.autoscale_view(scalex=False, scaley=True)
+
+            # SUBPLOT INFERIOR: deja que matplotlib escale Y
+            if getattr(self, "_ax_bottom", None) is not None and self._line2 is not None:
+                self._ax_bottom.relim()
+                self._ax_bottom.autoscale_view(scalex=False, scaley=True)
+
         self._fig.canvas.draw_idle()
+        # x_min, x_max = self._ax.get_xlim()
+        # self._ax_bottom.set_xlim(x_min, x_max)
 
     @staticmethod
     def _add_margin(a: float, b: float, frac: float = 0.05) -> Tuple[float, float]:
         span = (b - a) if (b - a) != 0 else 1.0
         m = span * frac
         return a - m, b + m
+
+    def _y_to_primary(self, y: float, from_axes: plt.Axes) -> float:
+        """Convierte una coordenada y de from_axes a la escala de self._ax."""
+        if from_axes is self._ax:
+            return y
+        # Pasamos y de coords de datos -> coords de pantalla con el eje origen...
+        y_disp = from_axes.transData.transform((0, y))[1]
+        # ...y luego de pantalla -> datos pero del eje primario.
+        return self._ax.transData.inverted().transform((0, y_disp))[1]
+    
+    def _update_legend_label(self, text: str) -> None:
+        """Actualiza el texto de la leyenda del gráfico derecho (self._ax2)."""
+        if not hasattr(self, "_legend") or self._legend is None:
+            return
+        try:
+            # Cambia el texto del primer elemento de la leyenda
+            self._legend.texts[0].set_text(text)
+            self._fig.canvas.draw_idle()
+        except Exception as e:
+            print(f"[legend update error] {e}", file=sys.stderr)
 
     # ---------- Interactivity ----------
     def _on_key_press(self, event):
@@ -325,14 +545,21 @@ class RealTimePlotter:
             self._fig.canvas.draw_idle()
 
     def _on_click(self, event):
-        if event.inaxes != self._ax:
+        # Acepta clics en ax o ax2; ignora fuera de ambos
+        if event.inaxes not in (self._ax, getattr(self, "_ax2", None)):
             return
+
+        # Mapea y a la escala del eje primario (izquierda)
+        y_primary = self._y_to_primary(event.ydata, event.inaxes)
+        x_val = event.xdata
+
         if self._delete_mode:
-            self._delete_nearest(event.xdata, event.ydata)
+            self._delete_nearest(x_val, y_primary)
             self._refresh_visual()
             return
-        # add point at click
-        self.put_point(event.xdata, event.ydata, source="click")
+
+        # añadir punto en eje primario
+        self.put_point(x_val, y_primary, source="click")
 
     def _delete_nearest(self, x: float, y: float) -> None:
         if not self._points_x:

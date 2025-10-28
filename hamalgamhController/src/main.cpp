@@ -288,7 +288,7 @@ void loop()
         int cnt = 0;
         float position = positions[0];
         float delta = (positions[1]-positions[0])/(times[1]-times[0])*100;
-        PWM_Instance->setPWM(6, 50.0f, position);
+        PWM_Instance->setPWM(6, 50.0f, position/100*(11-5)+5.0);
         fsm.flankCounter = 0;
         t0 = millis();
 
@@ -296,8 +296,8 @@ void loop()
         while(true) {
           delay(100-(millis()-t1));
           t1 = millis();
-          if(times[cnt]<(millis()-t0)){
-            if(cnt == (nPoints-1)) break;
+          if(times[cnt+1]<(millis()-t0)){
+            if(cnt == (nPoints-2)) break;
             else{
               cnt += 1;
               position = positions[cnt];
@@ -305,8 +305,10 @@ void loop()
             }
           }else position += delta;
 
-          PWM_Instance->setPWM(6, 50.0f, position);
+          PWM_Instance->setPWM(6, 50.0f, position/100*(11-5)+5.0);
           Serial.println(fsm.flankCounter*1000.0f/(millis() - t0));
+          // Serial.println(position*position);
+          Serial.println(position);
           fsm.flankCounter = 0;
         }
         Serial.print("[RUN] - Operation ");

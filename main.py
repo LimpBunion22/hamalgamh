@@ -9,6 +9,7 @@ import serial.tools.list_ports
 from realtime_plot import plotter
 from datetime import datetime
 
+PAR_COEF = 1.0
 
 BAUD = 115200
 HANDSHAKE_SEND = "[HELP]"
@@ -73,7 +74,15 @@ def interactive_loop(ser):
     print("<[SYSTEM] Esperando comando (CTRL-C para salir).")
     try:
         while True:
-            to_send = input("> ")
+            # to_send = input("> ")
+
+            while True:
+                time.sleep(0.1)
+                if plotter.event == True:
+                    plotter.event = False
+                    break
+
+            to_send = plotter.eventCmd  
             ser.write((to_send + '\n').encode('utf-8'))
             ser.flush()
             # lee respuestas hasta timeout
@@ -112,8 +121,9 @@ def interactive_loop(ser):
                         break
                 
                 start = time.time()
-                cnt = 0
                 xTime = 0.0
+                positions = []
+                parOrPos = True
                 while True:
                     line = ser.readline().decode('utf-8', errors='ignore')
                     if not line:
@@ -123,15 +133,20 @@ def interactive_loop(ser):
                             continue
                     print(f"<[ARDUINO]   {line.strip()}")
                     if line.__contains__("COMPLETED"):
+                        plotter.set_second_graph(positions, plotter._arduino_y)
                         break
                     y = 0.0
                     try:
                         y = float(line)
                     except:
                         y = -1
-                    plotter.put_point_arduino(xTime,y)
-                    xTime += 0.1
-                    cnt +=1            
+                    if parOrPos:
+                        plotter.put_point_arduino(xTime,y*PAR_COEF)
+                        xTime += 0.1   
+                    else:
+                        positions.append(y)
+                    parOrPos = not(parOrPos)
+
             
     except KeyboardInterrupt:
         print("\n<[SYSTEM] Saliendo...")

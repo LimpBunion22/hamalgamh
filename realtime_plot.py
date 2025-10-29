@@ -48,7 +48,15 @@ from matplotlib.widgets import Button
 import csv
 from datetime import datetime
 from itertools import zip_longest
-from tkinter import Tk, filedialog
+
+import platform
+
+so = platform.system()
+if so == "Windows":
+    import win32ui
+    import win32con 
+else:
+    from tkinter import Tk, filedialog
 
 @dataclass
 class Point:
@@ -202,7 +210,7 @@ class RealTimePlotter:
                 "grid.linestyle": (0, (3, 3)),
                 "grid.linewidth": 0.8,
                 "axes.grid": True,
-                "font.size": 18,
+                "font.size": 12,
                 "font.family": "DejaVu Sans",
             })
         elif theme == "dark":
@@ -380,7 +388,7 @@ class RealTimePlotter:
                     writer.writerow(["Tiempo servo [s]", "Puntos Servo", "Tiempo[s]", "Servo[%%]", "Par[N·m]"])  # cabecera
                     writer.writerows(zip_longest(self._points_x, self._points_y, self._arduino_x, self._points2_x, self._arduino_y, fillvalue=""))
             root.destroy()
-            
+
         def _on_load(event):
             root = Tk()
             root.withdraw()  # oculta la ventana principal de Tk

@@ -379,7 +379,8 @@ class RealTimePlotter:
                     writer = csv.writer(f)
                     writer.writerow(["Tiempo servo [s]", "Puntos Servo", "Tiempo[s]", "Servo[%%]", "Par[N·m]"])  # cabecera
                     writer.writerows(zip_longest(self._points_x, self._points_y, self._arduino_x, self._points2_x, self._arduino_y, fillvalue=""))
-
+            root.destroy()
+            
         def _on_load(event):
             root = Tk()
             root.withdraw()  # oculta la ventana principal de Tk
@@ -413,7 +414,8 @@ class RealTimePlotter:
                             self._points2_y.append(float(row["Par[N·m]"])  or 0.0)
                 
                 self._refresh_visual()
-        
+            root.destroy()
+
         self._btn_clear.on_clicked(_on_clear)
         self._btn_exit.on_clicked(_on_exit)
         self._btn_run.on_clicked(_on_run)

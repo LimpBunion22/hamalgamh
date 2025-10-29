@@ -404,13 +404,17 @@ class RealTimePlotter:
 
             ruta = None
             if so == "Windows":
+
                 dlg = win32ui.CreateFileDialog(
-                    0, ".csv", None, win32con.OFN_OVERWRITEPROMPT,
+                    1,  # 1 = modo abrir
+                    ".csv",
+                    None,
+                    win32con.OFN_FILEMUSTEXIST,
                     "CSV (*.csv)|*.csv|Todos los archivos (*.*)|*.*|"
                 )
                 dlg.SetOFNInitialDir(r"C:\Temp")
                 if dlg.DoModal() == win32con.IDOK:
-                    ruta = dlg.GetPathName()
+                    ruta =  dlg.GetPathName()
             else:
                 root = Tk()
                 root.withdraw()  # oculta la ventana principal de Tk

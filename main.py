@@ -16,26 +16,39 @@ HANDSHAKE_SEND = "[HELP]"
 HANDSHAKE_EXPECT = "[HELP] - WELCOME to the HAMALGAMH Testing System"
 TIMEOUT = 2  # segundos
 
+
+KNOWN_VID_PID = {
+    (0x2341, 0x804E), # Arduino MKR1010
+    (0x2341, 0x0043), # Arduino Uno (Arduino LLC)
+    (0x2341, 0x0001), # Arduino Uno (antiguo)
+    (0x2A03, 0x0043), # Genuino/Arduino
+    (0x1A86, 0x7523), # CH340/CH341 (clones)
+    (0x10C4, 0xEA60), # CP210x
+    (0x0403, 0x6001), # FTDI FT232
+}
+
 def list_serial_ports():
     """Devuelve lista de (device, desc)"""
     ports = serial.tools.list_ports.comports()
     return [(p.device, p.description) for p in ports]
 
 def auto_find_arduino():
-    """Intenta encontrar un puerto probable de Arduino.
-    Simple heurística: busca nombres típicos en distintos OS.
-    Devuelve device o None."""
-    candidates = list_serial_ports()
-    if not candidates:
-        return None
-    # preferencias por substrings típicas
-    substrings = ['usbmodem', 'usbserial', 'usb', 'ACM', 'COM']  # COM para Windows
-    for dev, desc in candidates:
-        low = dev.lower() + " " + desc.lower()
-        if any(s.lower() in low for s in substrings):
-            return dev
-    # si nada, devolver el primero
-    return candidates[0][0]
+    ports = serial.tools.list_ports.comports()
+    # 1) Coincidencia por VID/PID conocidos
+    for p in ports:
+        if p.vid is not None and p.pid is not None:
+            if (p.vid, p.pid) in KNOWN_VID_PID:
+                return p.device
+    # 2) Fallback por manufacturer/product si existen
+    for p in ports:
+        info = f"{p.manufacturer or ''} {p.product or ''}".lower()
+        if any(k in info for k in ["arduino", "genuino", "ftdi", "wch", "silicon labs", "cp210", "ch340", "ch341"]):
+            return p.device
+    # 3) Último recurso: el primero “USB/ACM/COM”
+    for p in ports:
+        if any(s in p.device.lower() for s in ["usb", "acm", "com"]):
+            return p.device
+    return None
 
 def open_serial(device, baud=BAUD, timeout=TIMEOUT):
     try:

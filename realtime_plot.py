@@ -371,14 +371,25 @@ class RealTimePlotter:
             self.event = True
 
         def _on_save(event):
-            root = Tk()
-            root.withdraw()  # oculta la ventana principal
 
-            ruta = filedialog.asksaveasfilename(
-                title="Guardar archivo CSV",
-                defaultextension=".csv",
-                filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
-            )
+            ruta = None
+            if so == "Windows":
+                dlg = win32ui.CreateFileDialog(
+                    0, ".csv", None, win32con.OFN_OVERWRITEPROMPT,
+                    "CSV (*.csv)|*.csv|Todos los archivos (*.*)|*.*|"
+                )
+                dlg.SetOFNInitialDir(r"C:\Temp")
+                if dlg.DoModal() == win32con.IDOK:
+                    ruta = dlg.GetPathName()
+            else:
+                root = Tk()
+                root.withdraw()  # oculta la ventana principal
+
+                ruta = filedialog.asksaveasfilename(
+                    title="Guardar archivo CSV",
+                    defaultextension=".csv",
+                    filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+                )
 
             if not ruta:
                 print("Guardado cancelado.")
@@ -390,12 +401,23 @@ class RealTimePlotter:
             root.destroy()
 
         def _on_load(event):
-            root = Tk()
-            root.withdraw()  # oculta la ventana principal de Tk
-            ruta = filedialog.askopenfilename(
-                title="Selecciona un archivo CSV",
-                filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
-            )
+
+            ruta = None
+            if so == "Windows":
+                dlg = win32ui.CreateFileDialog(
+                    0, ".csv", None, win32con.OFN_OVERWRITEPROMPT,
+                    "CSV (*.csv)|*.csv|Todos los archivos (*.*)|*.*|"
+                )
+                dlg.SetOFNInitialDir(r"C:\Temp")
+                if dlg.DoModal() == win32con.IDOK:
+                    ruta = dlg.GetPathName()
+            else:
+                root = Tk()
+                root.withdraw()  # oculta la ventana principal de Tk
+                ruta = filedialog.askopenfilename(
+                    title="Selecciona un archivo CSV",
+                    filetypes=[("Archivos CSV", "*.csv"), ("Todos los archivos", "*.*")]
+                )
 
             if not ruta:
                 print("No se seleccionó ningún archivo.")

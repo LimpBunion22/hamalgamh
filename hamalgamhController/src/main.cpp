@@ -1,5 +1,5 @@
 
-#define _PWM_LOGLEVEL_       4
+// #define _PWM_LOGLEVEL_       4
 #include "SAMD_PWM.h"
 #include "Arduino.h"
 
@@ -271,7 +271,7 @@ void loop()
           int comma = pair.indexOf(',');
           if (comma != -1) {
             positions[i] = pair.substring(0, comma).toFloat();
-            // if(positions[i])
+            if(positions[i])
             times[i] = pair.substring(comma + 1).toFloat();
           }
         }

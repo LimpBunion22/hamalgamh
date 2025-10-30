@@ -1,10 +1,10 @@
 
+#define _PWM_LOGLEVEL_       4
 #include "SAMD_PWM.h"
 #include "Arduino.h"
 
 #define MAX_POINTS 2048
 
-#define _PWM_LOGLEVEL_       4
 #if defined(__SAMD51__)
 // Pin 5:TCC2_CH1, pin 7: TCC1_CH2, pin 11: TCC0_CH1, pin 25/MOSI: TC2_CH0
 //uint32_t PWM_Pins[]   = { 5, 7, 11, 25 };     // Different timers
@@ -15,7 +15,6 @@ uint32_t PWM_Pins[]   = { 6, 9, 10, 11 };
 #endif
 
 #define NUM_OF_PINS       ( sizeof(PWM_Pins) / sizeof(uint32_t) )
-
 
 typedef enum {
     ST_BOOTING,
@@ -87,9 +86,10 @@ void setup()
   Serial.print(F("\n[SERVO] Starting PWM_MultiChannel on "));
 
   PWM_Instance = new SAMD_PWM(PWM_Pins[0], frequency[0], dutyCycle[0]);
+  PWM_Instance->setResolution(16);
   PWM_Instance->setPWM();
   Serial.println("\t[SYSTEM] - PWM Configured");
-
+  
   printPWMInfo(PWM_Instance);
   fsm.s = ST_WAIT;
   Serial.println(dashLine);
@@ -271,7 +271,7 @@ void loop()
           int comma = pair.indexOf(',');
           if (comma != -1) {
             positions[i] = pair.substring(0, comma).toFloat();
-            if(positions[i])
+            // if(positions[i])
             times[i] = pair.substring(comma + 1).toFloat();
           }
         }

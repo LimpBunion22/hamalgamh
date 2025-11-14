@@ -267,7 +267,7 @@ class RealTimePlotter:
             pass
         self._line, = self._ax.plot([], [], lw=1.8, marker='o', ms=3)
         # Línea para puntos Arduino
-        self._line_arduino, = self._ax2.plot([], [], lw=2, color='#ffb347', marker=None, ms=4, label='Par medido')
+        self._line_arduino, = self._ax2.plot([], [], lw=2, color='#ffb347', marker=None, ms=4, label='Par instantaneo')
         self._legend = self._ax2.legend(loc='upper right', facecolor='#0c0f12', edgecolor='#6a717d', labelcolor='#cbd3dc')
         self._line2, = self._ax_bottom.plot([], [], lw=1.8, marker='o', ms=3)
 
@@ -479,7 +479,7 @@ class RealTimePlotter:
                 del self._arduino_x[:overflow]
                 del self._arduino_y[:overflow]
             if self._arduino_y:
-                self._update_legend_label(f"Par medido: {self._arduino_y[-1]:.2f} N·m\nPar maximo:  {np.max(self._arduino_y):.2f} N·m")
+                self._update_legend_label(f"Par instantaneo: {self._arduino_y[-1]:.2f} N·m\nPar maximo:  {np.max(self._arduino_y):.2f} N·m")
         else:
             if(len(self._points_x)>0):
                 for i in range(len(self._points_x)):                

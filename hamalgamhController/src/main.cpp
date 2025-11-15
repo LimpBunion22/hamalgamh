@@ -360,7 +360,7 @@ void loop()
         Serial.println(" points.");
 
         // t0 = millis();
-        const int TIME_STEP_MS = 100;
+        const int TIME_STEP_MS = 50;
         fsm.flankCounter = 0;
         fsm.readerEnabled = true;
         int cnt = 0;
@@ -394,8 +394,7 @@ void loop()
           Serial.println(fsm.flankCounter*1000.0f/(t3 - t2));
           fsm.flankCounter = 0;
           t2 = t3;
-          // Serial.println(position*position);
-          Serial.println(cnt);
+          Serial.println(position);
           if(update) if(cnt == (nPoints-1)) break;
         }
         Serial.print("[RUN] - Operation ");

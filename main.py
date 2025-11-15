@@ -157,10 +157,10 @@ def interactive_loop(ser):
                     except:
                         y = -1
                     if readState == "TIME":
-                        xTime = y
+                        xTime = y/1000
                         readState = "FLANKS" 
                     elif readState == "FLANKS":
-                        plotter.put_point_arduino(xTime,y/(xTime-prevxTime)*1000*PAR_COEF) # y viene en flancos/ms. x1000-> flancos/s
+                        plotter.put_point_arduino(xTime,y/(xTime-prevxTime)*PAR_COEF)
                         prevxTime = xTime 
                         readState = "POSITION" 
                     elif readState == "POSITION":

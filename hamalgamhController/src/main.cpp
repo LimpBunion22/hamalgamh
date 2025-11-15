@@ -390,7 +390,7 @@ void loop()
           if(!update) position += delta;
 
           tcc_set_duty_both(PER_24, position);
-          t3 = millis();
+          t3 = millis(); 
           Serial.println(t3 - t0);
           Serial.println(fsm.flankCounter);
           fsm.flankCounter = 0;

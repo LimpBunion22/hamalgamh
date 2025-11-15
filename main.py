@@ -155,16 +155,22 @@ def interactive_loop(ser):
                     try:
                         y = float(line)
                     except:
-                        y = -1
+                        y = -1.0
                     if readState == "TIME":
                         xTime = y/1000
                         readState = "FLANKS" 
                     elif readState == "FLANKS":
-                        plotter.put_point_arduino(xTime,y/(xTime-prevxTime)*PAR_COEF)
+                        difT = xTime-prevxTime
+                        if difT < 0.001:
+                            plotter.put_point_arduino(xTime,0)
+                        else:
+                            plotter.put_point_arduino(xTime,y/difT*PAR_COEF)
                         prevxTime = xTime 
                         readState = "POSITION" 
                     elif readState == "POSITION":
-                        positions.append((y-SERVO_MIN)*100/(SERVO_MAX-SERVO_MIN))
+                        # print(f'\n<[DEBUG] pos:{y}')
+                        # print(f'\n<[DEBUG] posConv:{(y-SERVO_MIN)*100.0/(SERVO_MAX-SERVO_MIN)}')
+                        positions.append((y-SERVO_MIN)*100.0/(SERVO_MAX-SERVO_MIN))
                         readState = "TIME"
 
             

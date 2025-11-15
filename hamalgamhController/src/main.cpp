@@ -394,7 +394,7 @@ void loop()
           Serial.println(t3 - t0);
           Serial.println(fsm.flankCounter);
           fsm.flankCounter = 0;
-          Serial.println(position);
+          Serial.println(position,5);
           if(update) if(cnt == (nPoints-1)) break;
         }
         Serial.print("[RUN] - Operation ");

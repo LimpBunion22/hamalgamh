@@ -360,42 +360,51 @@ void loop()
         Serial.println(" points.");
 
         // t0 = millis();
-        const int TIME_STEP_MS = 50;
+        const int TIME_STEP_MS = 10;
+        const int CYCLES_TO_WRITE = 10;
         fsm.flankCounter = 0;
         fsm.readerEnabled = true;
         int cnt = 0;
         float position = positions[0];
         float delta = (positions[cnt+1]-positions[cnt])/(times[cnt+1]-times[cnt])*TIME_STEP_MS;
         fsm.flankCounter = 0;
-        unsigned long t2 = millis();
+        unsigned long t2 = 0;
         unsigned long t3 = 0;
         tcc_set_duty_both(PER_24, position);
         t0 = millis();
 
         unsigned long t1 = millis();
+        bool brk = false;
         while(true) {
-          delay(max(0,TIME_STEP_MS-(millis()-t1)));
-          t1 = millis();
-
           bool update = false;
-          while(times[cnt+1]<(t1-t0)){
-            update = true;
-            cnt += 1;
-            position = positions[cnt];
-            if(cnt == (nPoints-1))  break;
-            else{
-              delta = (positions[cnt+1]-positions[cnt])/(times[cnt+1]-times[cnt])*TIME_STEP_MS;
-            }
-          }          
-          if(!update) position += delta;
+          
+          for(int stCnt = 0; stCnt<CYCLES_TO_WRITE; stCnt++){
+            delay(max(0,TIME_STEP_MS-(millis()-t1)));
+            t1 = millis();
 
-          tcc_set_duty_both(PER_24, position);
+            while(times[cnt+1]<(t1-t0)){
+              update = true;
+              cnt += 1;
+              position = positions[cnt];
+              if(cnt == (nPoints-1)){
+                brk = true;
+                break;
+              }
+              else{
+                delta = (positions[cnt+1]-positions[cnt])/(times[cnt+1]-times[cnt])*TIME_STEP_MS;
+              }
+            }          
+            if(!update) position += delta;
+            tcc_set_duty_both(PER_24, position);
+            if(brk) break;
+          }
+
           t3 = millis(); 
           Serial.println(t3 - t0);
           Serial.println(fsm.flankCounter);
           fsm.flankCounter = 0;
-          Serial.println(position,5);
-          if(update) if(cnt == (nPoints-1)) break;
+          Serial.println(position,5);          
+          if(brk) break;
         }
         Serial.print("[RUN] - Operation ");
         Serial.print(operationName);

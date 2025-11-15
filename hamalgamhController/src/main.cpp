@@ -369,7 +369,7 @@ void loop()
         fsm.flankCounter = 0;
         unsigned long t2 = millis();
         unsigned long t3 = 0;
-        tcc_set_duty_both(PER_24, position/100*(0.10-0.05)+0.05);
+        tcc_set_duty_both(PER_24, position);
         t0 = millis();
 
         unsigned long t1 = millis();
@@ -389,11 +389,11 @@ void loop()
           }          
           if(!update) position += delta;
 
-          tcc_set_duty_both(PER_24, position/100*(0.10-0.05)+0.05);
+          tcc_set_duty_both(PER_24, position);
           t3 = millis();
-          Serial.println(fsm.flankCounter*1000.0f/(t3 - t2));
+          Serial.println(t3 - t0);
+          Serial.println(fsm.flankCounter);
           fsm.flankCounter = 0;
-          t2 = t3;
           Serial.println(position);
           if(update) if(cnt == (nPoints-1)) break;
         }

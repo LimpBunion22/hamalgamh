@@ -9,6 +9,8 @@ import serial.tools.list_ports
 from realtime_plot import plotter
 from datetime import datetime
 
+SERVO_MIN = 0.05
+SERVO_MAX = 0.10
 PAR_COEF = 1.0
 
 BAUD = 115200
@@ -119,7 +121,7 @@ def interactive_loop(ser):
                     print(f"<[SYSTEM] Datos y{plotter._points_y[i]} x{plotter._points_x[i]}")
 
                 for i in range(len(plotter._points_x)):
-                    testData += str(plotter._points_y[i]) + "," + str(1000*(plotter._points_x[i])) + ";"
+                    testData += str(plotter._points_y[i]/100*(SERVO_MAX-SERVO_MIN)+SERVO_MIN) + "," + str(1000*(plotter._points_x[i])) + ";"
                 
                 print(f"<[SYSTEM] Ejecutando operacion \n\t{testData}")
                 ser.write((testData + '\n').encode('utf-8'))
@@ -135,8 +137,9 @@ def interactive_loop(ser):
                 
                 start = time.time()
                 xTime = 0.0
+                prevxTime = 0.0
                 positions = []
-                parOrPos = True
+                readState = "TIME"
                 while True:
                     line = ser.readline().decode('utf-8', errors='ignore')
                     if not line:
@@ -153,12 +156,16 @@ def interactive_loop(ser):
                         y = float(line)
                     except:
                         y = -1
-                    if parOrPos:
-                        plotter.put_point_arduino(xTime,y*PAR_COEF)
-                        xTime += 0.1   
-                    else:
-                        positions.append(y)
-                    parOrPos = not(parOrPos)
+                    if readState == "TIME":
+                        xTime = y
+                        readState = "FLANKS" 
+                    elif readState == "FLANKS":
+                        plotter.put_point_arduino(xTime,y/(xTime-prevxTime)*1000*PAR_COEF) # y viene en flancos/ms. x1000-> flancos/s
+                        prevxTime = xTime 
+                        readState = "POSITION" 
+                    elif readState == "POSITION":
+                        positions.append((y-SERVO_MIN)*100/(SERVO_MAX-SERVO_MIN))
+                        readState = "TIME"
 
             
     except KeyboardInterrupt:

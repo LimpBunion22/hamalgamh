@@ -11,7 +11,7 @@ from datetime import datetime
 
 SERVO_MIN = 0.05
 SERVO_MAX = 0.10
-PAR_COEF = 1.0
+PAR_COEF = 2000.0/5000.0
 
 BAUD = 115200
 HANDSHAKE_SEND = "[HELP]"
@@ -164,7 +164,7 @@ def interactive_loop(ser):
                         if difT < 0.001:
                             plotter.put_point_arduino(xTime,0)
                         else:
-                            plotter.put_point_arduino(xTime,y/difT*PAR_COEF)
+                            plotter.put_point_arduino(xTime,(y/difT-10000)*PAR_COEF)
                         prevxTime = xTime 
                         readState = "POSITION" 
                     elif readState == "POSITION":

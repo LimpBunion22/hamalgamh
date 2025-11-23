@@ -280,7 +280,8 @@ class RealTimePlotter:
 
         if self._ylim_fixed:
             self._ax.set_ylim(*self._ylim_fixed)
-            # self._ax_bottom.set_ylim(*self._ylim_fixed)  # usa mismo rango Y por defecto
+            self._ax2.set_ylim(0.0,2000.0)
+            self._ax_bottom.set_ylim(0.0,2000.0)  # usa mismo rango Y por defecto
 
 
         self._ax.set_xlabel("Tiempo [s]")

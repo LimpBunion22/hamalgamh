@@ -121,7 +121,7 @@ def interactive_loop(ser):
                     print(f"<[SYSTEM] Datos y{plotter._points_y[i]} x{plotter._points_x[i]}")
 
                 for i in range(len(plotter._points_x)):
-                    testData += str(plotter._points_y[i]/100*(SERVO_MAX-SERVO_MIN)+SERVO_MIN) + "," + str(1000*(plotter._points_x[i])) + ";"
+                    testData += str((100.0-plotter._points_y[i])/100*(SERVO_MAX-SERVO_MIN)+SERVO_MIN) + "," + str(1000*(plotter._points_x[i])) + ";"
                 
                 print(f"<[SYSTEM] Ejecutando operacion \n\t{testData}")
                 ser.write((testData + '\n').encode('utf-8'))
@@ -170,7 +170,7 @@ def interactive_loop(ser):
                     elif readState == "POSITION":
                         # print(f'\n<[DEBUG] pos:{y}')
                         # print(f'\n<[DEBUG] posConv:{(y-SERVO_MIN)*100.0/(SERVO_MAX-SERVO_MIN)}')
-                        positions.append((y-SERVO_MIN)*100.0/(SERVO_MAX-SERVO_MIN))
+                        positions.append(100.0-(y-SERVO_MIN)*100.0/(SERVO_MAX-SERVO_MIN))
                         readState = "TIME"
 
             
